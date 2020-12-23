@@ -66,3 +66,74 @@ This tells NGINX to use the full URL (including scheme and host) to hash consist
 
 Since we're deploying a cluster of nodes, we're instructing nginx to load balance across the _other_ nodes in the cluster.
 
+### Deploy it on Fly
+
+The quickest way to initialize the app is to import the `fly.source.toml` file supplied:
+
+```
+fly init gif-cache-example --import fly.source.toml
+```
+
+Replace `gif-cache-example` with your preferred app name or omit it to have Fly generate a name for you. You may be prompted for which organization you want the app to run in. 
+
+Our NGINX config runs on port 8080, so the `fly.toml` instructs Fly to route HTTP and HTTPS traffic to port 8080.
+
+NGINX needs disks, so go ahead and create one or more volumes (you'll need one volume per node when you scale out):
+
+```
+flyctl volumes create nginx_data --region dfw --size 500
+```
+
+This creates a 500GB volume named `nginx_data` in Dallas. You can add more volumes in Dallas, or put them in other regions, just make sure they're all named `nginx_data`.
+
+To deploy the app, run:
+
+```
+fly deploy
+```
+
+Congrats! You now have a single node GIF cache running. Once you've created more volumes, you can scale out:
+
+```
+flyctl scale count 3
+```
+
+Now you have three total NGINX nodes running, each with its own disk, and requests with the same URL are serviced by the same node.
+
+## See it in action with cURL
+
+Fire up your terminal and run this command to make a request to our example GIF caching service, and print the headers out:
+
+```
+curl -D - -o /dev/null -sS "https://nginx-cluster-example.fly.dev/media/l1KVcBV7rstepCYhi/giphy.gif"
+```
+
+You should see this output:
+
+```
+HTTP/2 200
+server: Fly/004c36a8 (2020-12-08)
+date: Wed, 23 Dec 2020 21:05:02 GMT
+content-type: image/gif
+content-length: 3946398
+accept-ranges: bytes
+last-modified: Wed, 12 Apr 2017 19:14:41 GMT
+etag: "81630bf6b606ff600f90dc91a9dbd0a1"
+via: 1.1 varnish, 1.1 varnish, 2 fly.io
+access-control-allow-origin: *
+cross-origin-resource-policy: cross-origin
+age: 50421
+x-served-by: cache-bwi5135-BWI, cache-iah17222-IAH
+x-cache: HIT, HIT
+x-cache-hits: 117, 1
+x-timer: S1608753636.146957,VS0,VE1
+strict-transport-security: max-age=86400
+cache-control: max-age=86400
+fly-cache-status: HIT
+x-instance: 3d727da8
+```
+
+There are some special headers here:
+
+* `x-instance` – specifies the ID of the node that serviced the request. This should be the same each time you run cURL with that URL
+* `fly-cache-status` – indicates if a request was served from the cache or not.
