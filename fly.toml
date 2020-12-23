@@ -1,0 +1,39 @@
+# fly.toml file generated for nginx-cluster-example on 2020-12-23T11:37:25-06:00
+
+app = "nginx-cluster-example"
+
+[mount]
+source = "nginx_data"
+destination = "/data"
+
+[[services]]
+  internal_port = 8080
+  protocol = "tcp"
+
+  [services.concurrency]
+    type = "requests"
+    hard_limit = 100
+    soft_limit = 30
+
+  [[services.ports]]
+    handlers = ["http"]
+    port = "80"
+
+  [[services.ports]]
+    handlers = ["tls", "http"]
+    port = "443"
+
+  [[services.http_checks]]
+    interval = 3000
+    method = "get"
+    path = "/healthz"
+    protocol = "http"
+    timeout = 1000
+    restart_limit = 0
+    [services.http_checks.headers]
+      Host = "health.check"
+  [[services.script_checks]]
+    interval = 10000
+    timeout = 1000
+    command = "/fly/check-nodes.sh"
+    restart_limit = 0
