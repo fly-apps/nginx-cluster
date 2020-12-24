@@ -1,6 +1,6 @@
 # A horizontally scalable NGINX caching cluster
 
-NGINX is a proxy server that makes HTTP caching simple. Run it in front of an app, set the right HTTP caching headers, and it does its job. If you want to build a basic CDN, you can NGINX in multiple cities, route people to the nearest instance, and apply a little magic.
+NGINX is a proxy server that makes HTTP caching simple. Run it in front of an app, set the right HTTP caching headers, and it does its job. If you want to build a basic CDN, you can fire up NGINX in multiple cities, route people to the nearest instance, and apply a little magic.
 
 This is a Docker based NGINX cluster that works kind of like a CDN. It's designed to run on [Fly.io](https://fly.io) with persistent volumes and private networking (6PN). It also runs locally so you can fiddle around with it.
 
