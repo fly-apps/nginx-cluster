@@ -94,7 +94,7 @@ This is how a basic CDN works. Multiple cache nodes in each region, each request
 
 Letting each region manage origin requests is simple, but not always ideal. A common pattern for "fixing" this is to make origin requests from one region, cache there, and then let each region use that cache as its own origin. It's a layer of caches, like an onion!
 
-An request to an onion might look like this:
+A request to an onion might look like this:
 
 ```
 ( ͡° ͜ʖ ͡°) ⟶ nginx sydney ⟶ nginx ord ⟶ origin
@@ -102,7 +102,7 @@ An request to an onion might look like this:
 
 This has several advantages, and one major complication:
 
-First, it greatly reduces origin load. If only one server is able to make requests to the origin for a specific URL, it's simple to throttle origin requests. Our `nginx.conf` actuall does this by setting `proxy_cache_lock on`, ensuring that we only make one request per URL at a time.
+First, it greatly reduces origin load. If only one server is able to make requests to the origin for a specific URL, it's simple to throttle origin requests. Our `nginx.conf` actually does this by setting `proxy_cache_lock on`, ensuring that we only make one request per URL at a time.
 
 And, it's usually faster. Requests served from our cache in Chicago are going to be faster than requests served from origin. And even for uncached requests, our network connection between Sydney and Chicago is _usually_ better than our connection between Sydney and the origin. Routing requests through Chicago to an origin is likely faster.
 
