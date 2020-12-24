@@ -97,7 +97,7 @@ Letting each region manage origin requests is simple, but not always ideal. A co
 An request to an onion might look like this:
 
 ```
-( ͡° ͜ʖ ͡°)  ----> nginx sydney --> nginx ord --> origin
+( ͡° ͜ʖ ͡°) ⟶ nginx sydney ⟶ nginx ord ⟶ origin
 ```
 
 This has several advantages, and one major complication:
