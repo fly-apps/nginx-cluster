@@ -2,6 +2,9 @@
 
 app = "nginx-cluster-example"
 
+[experimental]
+private_network=true
+
 [mount]
 source = "nginx_data"
 destination = "/data"
@@ -32,6 +35,7 @@ destination = "/data"
     restart_limit = 0
     [services.http_checks.headers]
       Host = "health.check"
+
   [[services.script_checks]]
     interval = 10000
     timeout = 1000

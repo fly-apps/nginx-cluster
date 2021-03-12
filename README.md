@@ -4,25 +4,20 @@ NGINX is a proxy server that makes HTTP caching simple. Run it in front of an ap
 
 This is a Docker based NGINX cluster that works kind of like a CDN. It's designed to run on [Fly.io](https://fly.io) with persistent volumes and private networking (6PN). It also runs locally so you can fiddle around with it.
 
-### Speedrun
+### Speed-run
 
-1. Create an application on Fly
+1. `flyctl launch` (don't deploy yet)
 2. Add volumes with `flyctl volumes create`
 3. `flyctl deploy`
-4. `flyctl scale ???` to scale horizontally
-5. Launch your CDN
+3. `flyctl scale count <x>` to scale horizontally
+4. Profit
 
-## Cache hit ratios and penny pinching
+## Consistent hashing
 
-People building CDNs want almost every request to come from the cache. In a perfect world, the first person to visit a URL would suffer a slow response, and the second through millionth people would get quick cache responses. With one NGINX, this works great. With two, the chance of a miss is doubled (because each cache is independent). With 100, gross.
-
-There's also the cost of storage. People running CDNs want to make a bunch and buying extra storage is a good way to make less money. It's cheaper to cache a single copy of a file than two.
-
-The NGINX upstream module responsible for load balancing has a handy [`consistent_hash`](https://www.nginx.com/resources/wiki/modules/consistent_hash/) option designed specifically to solve this class of problem.
+This cluster uses consistent hashing to ensure that identical requests are sent to the same NGINX instance each time. This is helpful for maximizing cache hits, and uses the built in [`consistent_hash`](https://www.nginx.com/resources/wiki/modules/consistent_hash/) setting for upstreams.
 
 > `ngx_http_upstream_consistent_hash` - a load balancer that uses an internal consistent hash ring to select the right backend node
 
-This gives us a way to tell NGINX to send requests for the same content to the same "upstream" server.
 
 ## Let's build a Giphy cache
 
@@ -64,11 +59,11 @@ upstream nginx-nodes {
 
 This tells NGINX to use the full URL (including scheme and host) to hash consistently, and send requests to port `8081` on `node1` and `node2`. And it says to consider those nodes bad if they fail 5 times in one second, which means we can retry the request on another. 
 
-Since we're deploying a cluster of nodes, we're instructing nginx to load balance across the _other_ nodes in the cluster.
+Since we're deploying a cluster of nodes, we're instructing NGINX to load balance across the _other_ nodes in the cluster.
 
 ### Discovering nodes
 
-Making this cluster topology work properly is an exercise in service discovery. The Fly DNS service always has a current list of IPv6 Private Network (6PN) addresses for VMs in a given app. The `dig` utility can query the DNS service for _all_ running VMs in a given application:
+Making this cluster topology work properly is a game of service discovery. The Fly DNS service always has a current list of IPv6 Private Network (6PN) addresses for VMs in a given app. The `dig` utility can query the DNS service for _all_ running VMs in a given application:
 
 ```
 dig aaaa $FLY_APP_NAME.internal @fdaa::3 +short
@@ -86,28 +81,9 @@ dig aaaa dfw.$FLY_APP_NAME.internal @fdaa::3 +short
 We can use these to keep `nginx.conf` updated with a list of servers. This happens in two places:
 
 1. `start.sh` preps the `nginx.conf` file, calls `check-nodes.sh`, and then boots NGINX
-2. `check-nodes.sh` uses `dig` to find the list of servers _in the same region_ and write `upstream` block with known 6pn addresses. This script runs periodically to keep things fresh.
+2. `check-nodes.sh` uses `dig` to find the list of servers _in the same region_ and write `upstream` block with known 6PN addresses. This script runs periodically to keep things fresh.
 
 This is how a basic CDN works. Multiple cache nodes in each region, each requests from origin when it needs a file, and caches it for later. Each region will still need to warm its own cache to get snappy.
-
-### An aside about onions
-
-Letting each region manage origin requests is simple, but not always ideal. A common pattern for "fixing" this is to make origin requests from one region, cache there, and then let each region use that cache as its own origin. It's a layer of caches, like an onion!
-
-A request to an onion might look like this:
-
-```
-( ͡° ͜ʖ ͡°) ⟶ nginx sydney ⟶ nginx ord ⟶ origin
-```
-
-This has several advantages, and one major complication:
-
-First, it greatly reduces origin load. If only one server is able to make requests to the origin for a specific URL, it's simple to throttle origin requests. Our `nginx.conf` actually does this by setting `proxy_cache_lock on`, ensuring that we only make one request per URL at a time.
-
-And, it's usually faster. Requests served from our cache in Chicago are going to be faster than requests served from origin. And even for uncached requests, our network connection between Sydney and Chicago is _usually_ better than our connection between Sydney and the origin. Routing requests through Chicago to an origin is likely faster.
-
-The downside is resiliency. With this kind of setup, if we lose our Chicago datacenter we suddenly can't talk to the origin. We'd need to add a fallback region. 
-
 ### Deploying a CDN
 
 The NGINX features we're using have been around for _ages_. They were built long before 2020. But deploying a CDN has, historically, been beyond the scope of a single developer. This is part of the reason we built Fly, we think ops can be automated and individual developers can ship their own CDNs.
@@ -119,12 +95,12 @@ So here's how to deploy a shiny, horizontally scalable CDN in about 5 minutes.
 The quickest way to create an app is to import the `fly.source.toml` file we created for you:
 
 ```
-fly init gif-cache-example --import fly.source.toml
+fly launch <app-name>
 ```
 
-Replace `gif-cache-example` with your preferred app name or omit it to have Fly generate a name for you. You may be prompted for which organization you want the app to run in. 
+Replace `<app-name>` with your preferred app name or omit it to have Fly generate a name for you. You may be prompted for which organization you want the app to run in. 
 
-Our NGINX config runs on port 8080, so the `fly.toml` instructs Fly to route HTTP and HTTPS traffic to port 8080.
+When it asks you if you want to deploy, say no.
 
 NGINX needs disks, so go ahead and create one or more volumes (you'll need one volume per node when you scale out):
 
@@ -140,7 +116,7 @@ To deploy the app, run:
 fly deploy
 ```
 
-Congrats! You now have a single server GIF cache running with global anycast IPs routing your traffic (run `flyctl info`).
+Congrats! You now have a single server GIF cache running with global Anycast IPs routing your traffic (run `flyctl info`).
 
 Scaling is just a matter of adding volumes for your next VMs. Add 'em in the regions you want, put multiples in the regions you want to shard, and then scale your app out:
 
@@ -224,6 +200,4 @@ The `x-instance` header indicates it came from a different server.
 
 HTTP caching is simple, but global cache expiration is hard. Users will want to clear the cache when their app changes, or they need to delete stale data for other reasons, and "immediate cache expiration" is a spiff feature to offer. If we were going to build that, we'd build a little worker that runs with each NGINX server and listens for purge events from [NATs](https://github.com/fly-examples/nats-cluster).
 
-People who build snappy apps spend a lot of time optimizing images. CDNs can do that! This NGINX cluster could work with [`imgproxy`](https://fly.io/launch/github/imgproxy/imgproxy) or ['imaginary'](https://fly.io/launch/github/h2non/imaginary) to automatically cache and serve webp images, add classy visual effects, and even do smart cropping.
-
-(You might notice that each of these involve running _more_ VMs on Fly. Total coincidence.)
+People who build snappy apps spend a lot of time optimizing images. CDNs can do that! This NGINX cluster could work with [`imgproxy`](https://fly.io/launch/github/imgproxy/imgproxy) or ['imaginary'](https://fly.io/launch/github/h2non/imaginary) to automatically cache and serve WebP images, add classy visual effects, and even do smart cropping.
