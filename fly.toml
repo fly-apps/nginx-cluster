@@ -12,6 +12,7 @@ destination = "/data"
 [[services]]
   internal_port = 8080
   protocol = "tcp"
+  script_checks = []
 
   [services.concurrency]
     type = "requests"
@@ -35,9 +36,3 @@ destination = "/data"
     restart_limit = 0
     [services.http_checks.headers]
       Host = "health.check"
-
-  [[services.script_checks]]
-    interval = 10000
-    timeout = 1000
-    command = "/fly/check-nodes.sh"
-    restart_limit = 0
