@@ -6,4 +6,13 @@ ADD nginx.conf /etc/nginx/nginx.conf
 ADD /scripts /fly
 ENV NGINX_PORT=8080
 
-CMD ["/fly/start.sh"]
+
+RUN curl -L https://github.com/DarthSim/hivemind/releases/download/v1.1.0/hivemind-v1.1.0-linux-amd64.gz -o hivemind.gz \
+  && gunzip hivemind.gz \
+  && mv hivemind /usr/local/bin
+
+COPY Procfile Procfile
+RUN chmod +x /usr/local/bin/hivemind
+RUN chmod +x /fly/*.sh
+
+CMD ["/usr/local/bin/hivemind"]
